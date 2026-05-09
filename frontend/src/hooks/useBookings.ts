@@ -1,12 +1,12 @@
 import { useMemo } from "react";
 import { bookingFromNostr, bookingStatusToNostr } from "../adapters/nostr/bookingAdapter";
 import { AcceptBooking } from "../application/usecases/acceptBooking";
-import { SlotOccupancy } from "../domain/slotOccupancy";
 import {
-  isActiveBookingStatus,
-  makeSlotAllocationKey,
-  makeSlotBidKey
-} from "../domain/slotAllocation";
+  buildRequestsByAllocationKey,
+  selectActiveBidBySlotAndStudent,
+  selectWinningOccupancyByAllocationKey
+} from "../domain/bookingSelectors";
+import { makeSlotAllocationKey } from "../domain/slotAllocation";
 import { Booking } from "../domain/booking";
 import { BookingRepository } from "../ports/bookingRepository";
 import { useBookingActions } from "./useBookingActions";
@@ -62,83 +62,15 @@ export function useBookings(userId: string, lessonDefaults?: {
   }, [incoming, outgoing]);
 
   const requestsByAllocationKey = useMemo(() => {
-    return allBookings.reduce<Record<string, Booking[]>>((acc, booking) => {
-      const existing = acc[booking.slotAllocationKey] || [];
-      existing.push(booking);
-      existing.sort((left, right) => {
-        const leftTs =
-          statuses[left.id]?.created_at || requestMap[left.id]?.created_at || 0;
-        const rightTs =
-          statuses[right.id]?.created_at || requestMap[right.id]?.created_at || 0;
-
-        return rightTs - leftTs;
-      });
-      acc[booking.slotAllocationKey] = existing;
-      return acc;
-    }, {});
+    return buildRequestsByAllocationKey(allBookings, statuses, requestMap);
   }, [allBookings, requestMap, statuses]);
 
   const winnerByAllocationKey = useMemo(() => {
-    return allBookings.reduce<Record<string, SlotOccupancy>>((acc, booking) => {
-      if (booking.status !== "accepted") {
-        return acc;
-      }
-
-      const currentWinner = acc[booking.slotAllocationKey];
-      const bookingTs =
-        statuses[booking.id]?.created_at || requestMap[booking.id]?.created_at || 0;
-      const currentWinnerTs = currentWinner
-        ? Math.max(
-            ...allBookings
-              .filter(
-                (candidate) =>
-                  candidate.slotAllocationKey === booking.slotAllocationKey &&
-                  candidate.status === "accepted"
-              )
-              .map(
-                (candidate) =>
-                  statuses[candidate.id]?.created_at ||
-                  requestMap[candidate.id]?.created_at ||
-                  0
-              ),
-            0
-          )
-        : -1;
-
-      if (!currentWinner || bookingTs >= currentWinnerTs) {
-        acc[booking.slotAllocationKey] = {
-          studentId: booking.studentId,
-          source: "booking"
-        };
-      }
-
-      return acc;
-    }, {});
+    return selectWinningOccupancyByAllocationKey(allBookings, statuses, requestMap);
   }, [allBookings, requestMap, statuses]);
 
   const activeBidBySlotAndStudent = useMemo(() => {
-    return allBookings.reduce<Record<string, Booking>>((acc, booking) => {
-      if (!isActiveBookingStatus(booking.status)) {
-        return acc;
-      }
-
-      const slotBidKey = makeSlotBidKey(booking.tutorId, booking.studentId, {
-        start: booking.scheduledAt,
-        end: booking.scheduledEnd || ""
-      });
-      const existing = acc[slotBidKey];
-      const bookingTs =
-        statuses[booking.id]?.created_at || requestMap[booking.id]?.created_at || 0;
-      const existingTs = existing
-        ? statuses[existing.id]?.created_at || requestMap[existing.id]?.created_at || 0
-        : -1;
-
-      if (!existing || bookingTs >= existingTs) {
-        acc[slotBidKey] = booking;
-      }
-
-      return acc;
-    }, {});
+    return selectActiveBidBySlotAndStudent(allBookings, statuses, requestMap);
   }, [allBookings, requestMap, statuses]);
 
   const bookingRepository = useMemo<BookingRepository>(() => {
