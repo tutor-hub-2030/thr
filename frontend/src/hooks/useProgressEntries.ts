@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { nostrClient } from "../nostr/client";
-import { ProgressEntry, ProgressEntryEvent } from "../types/nostr";
-import { getTagValue } from "../utils/nostrTags";
+import { ProgressEntryEvent } from "../types/nostr";
+import { usePrivateMessagingRepository } from "./usePrivateMessagingRepository";
 
 export function useProgressEntries(pubkey: string) {
   const [entries, setEntries] = useState<ProgressEntryEvent[]>([]);
+  const messagingRepository = usePrivateMessagingRepository();
 
   useEffect(() => {
     const pushEntry = (entry: ProgressEntryEvent) => {
@@ -17,65 +17,8 @@ export function useProgressEntries(pubkey: string) {
       });
     };
 
-    const incoming = nostrClient.subscribe(
-      { kinds: [30004], "#p": [pubkey], limit: 200 },
-      async (event) => {
-        const plaintext = await nostrClient.decryptContent(
-          event.pubkey,
-          event.content
-        );
-        if (!plaintext) {
-          return;
-        }
-        try {
-          const parsed = JSON.parse(plaintext) as ProgressEntry;
-          pushEntry({
-            id: event.id,
-            created_at: event.created_at,
-            pubkey: event.pubkey,
-            counterparty: event.pubkey,
-            entry: parsed
-          });
-        } catch {
-          // ignore
-        }
-      }
-    );
-
-    const outgoing = nostrClient.subscribe(
-      { kinds: [30004], authors: [pubkey], limit: 200 },
-      async (event) => {
-        const recipient = getTagValue(event.tags, "p");
-        if (!recipient) {
-          return;
-        }
-        const plaintext = await nostrClient.decryptContent(
-          recipient,
-          event.content
-        );
-        if (!plaintext) {
-          return;
-        }
-        try {
-          const parsed = JSON.parse(plaintext) as ProgressEntry;
-          pushEntry({
-            id: event.id,
-            created_at: event.created_at,
-            pubkey: event.pubkey,
-            counterparty: recipient,
-            entry: parsed
-          });
-        } catch {
-          // ignore
-        }
-      }
-    );
-
-    return () => {
-      incoming();
-      outgoing();
-    };
-  }, [pubkey]);
+    return messagingRepository.subscribeProgressEntriesForUser(pubkey, pushEntry);
+  }, [messagingRepository, pubkey]);
 
   const byCounterparty = useMemo(() => {
     return entries.reduce<Record<string, ProgressEntryEvent[]>>((acc, entry) => {

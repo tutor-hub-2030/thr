@@ -1,12 +1,13 @@
 import { useMemo } from "react";
-import { bookingFromNostr, bookingStatusToNostr } from "../adapters/nostr/bookingAdapter";
+import { bookingFromNostr } from "../adapters/nostr/bookingAdapter";
+import { createNostrBookingRepository } from "../adapters/nostr/bookingRepository";
 import { AcceptBooking } from "../application/usecases/acceptBooking";
+import { createAcceptedLessonFactory } from "../application/usecases/createAcceptedLessonFactory";
 import {
   buildRequestsByAllocationKey,
   selectActiveBidBySlotAndStudent,
   selectWinningOccupancyByAllocationKey
 } from "../domain/bookingSelectors";
-import { makeSlotAllocationKey } from "../domain/slotAllocation";
 import { Booking } from "../domain/booking";
 import { BookingRepository } from "../ports/bookingRepository";
 import { useBookingActions } from "./useBookingActions";
@@ -74,48 +75,14 @@ export function useBookings(userId: string, lessonDefaults?: {
   }, [allBookings, requestMap, statuses]);
 
   const bookingRepository = useMemo<BookingRepository>(() => {
-    const repo: BookingRepository = {
-      async getIncoming(targetUserId: string) {
-        return targetUserId === userId ? incoming : [];
-      },
-      async getOutgoing(targetUserId: string) {
-        return targetUserId === userId ? outgoing : [];
-      },
-      async getById(id: string) {
-        return incoming.find((booking) => booking.id === id) ||
-          outgoing.find((booking) => booking.id === id) ||
-          null;
-      },
-      async getByAllocationKey(allocationKey: string) {
-        return requestsByAllocationKey[allocationKey] || [];
-      },
-      async updateStatus(
-        id: string,
-        status: Booking["status"],
-        options?: { reason?: Booking["resolutionReason"] }
-      ) {
-        const request = requestMap[id];
-        if (!request) {
-          return;
-        }
-        if (status === "pending") {
-          return;
-        }
-        const recipient =
-          status === "cancelled" ? request.tutorPubkey : request.pubkey;
-
-        await publishBookingStatus(recipient, {
-          bookingId: id,
-          status: bookingStatusToNostr(status),
-          reason: options?.reason,
-          slotAllocationKey:
-            request.request.slotAllocationKey ||
-            makeSlotAllocationKey(request.tutorPubkey, request.request.requestedSlot)
-        });
-      }
-    };
-
-    return repo;
+    return createNostrBookingRepository({
+      userId,
+      incoming,
+      outgoing,
+      requestMap,
+      requestsByAllocationKey,
+      publishBookingStatus
+    });
   }, [
     incoming,
     outgoing,
@@ -125,29 +92,22 @@ export function useBookings(userId: string, lessonDefaults?: {
     userId
   ]);
 
+  const acceptedLessonFactory = useMemo(
+    () =>
+      createAcceptedLessonFactory({
+        requestMap,
+        defaults: {
+          durationMin: lessonDefaults?.durationMin,
+          subject: lessonDefaults?.subject
+        }
+      }),
+    [lessonDefaults?.durationMin, lessonDefaults?.subject, requestMap]
+  );
+
   const acceptBooking = useMemo(
     () =>
-      new AcceptBooking(bookingRepository, lessonRepository, ({ bookingId, tutorId, studentId, scheduledAt }) => {
-        const request = requestMap[bookingId];
-        const startTime = Date.parse(scheduledAt);
-        const endTime = Date.parse(request?.request.requestedSlot.end || "");
-        const durationMin =
-          Number.isNaN(startTime) || Number.isNaN(endTime) || endTime <= startTime
-            ? lessonDefaults?.durationMin || 60
-            : Math.max(15, Math.round((endTime - startTime) / 60000));
-
-        return {
-          id: bookingId,
-          bookingId,
-          tutorId,
-          studentId,
-          scheduledAt,
-          durationMin,
-          subject: lessonDefaults?.subject || "",
-          status: "scheduled"
-        };
-      }),
-    [bookingRepository, lessonDefaults?.durationMin, lessonDefaults?.subject, lessonRepository, requestMap]
+      new AcceptBooking(bookingRepository, lessonRepository, acceptedLessonFactory),
+    [acceptedLessonFactory, bookingRepository, lessonRepository]
   );
 
   return {

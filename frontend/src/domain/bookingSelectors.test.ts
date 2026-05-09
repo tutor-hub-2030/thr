@@ -1,30 +1,10 @@
+import { describe, expect, it } from "vitest";
 import { Booking } from "./booking";
 import {
   buildRequestsByAllocationKey,
   selectActiveBidBySlotAndStudent,
   selectWinningOccupancyByAllocationKey
 } from "./bookingSelectors";
-
-function assert(condition: unknown, message: string): asserts condition {
-  if (!condition) {
-    throw new Error(message);
-  }
-}
-
-function assertEqual<T>(actual: T, expected: T, message: string) {
-  if (actual !== expected) {
-    throw new Error(`${message}. Expected ${String(expected)}, received ${String(actual)}`);
-  }
-}
-
-function assertDeepEqual(actual: unknown, expected: unknown, message: string) {
-  const actualJson = JSON.stringify(actual);
-  const expectedJson = JSON.stringify(expected);
-
-  if (actualJson !== expectedJson) {
-    throw new Error(`${message}. Expected ${expectedJson}, received ${actualJson}`);
-  }
-}
 
 function makeBooking(overrides: Partial<Booking> = {}): Booking {
   return {
@@ -39,69 +19,67 @@ function makeBooking(overrides: Partial<Booking> = {}): Booking {
   };
 }
 
-function runBookingSelectorTests() {
-  const oldest = makeBooking({ id: "oldest" });
-  const newest = makeBooking({ id: "newest" });
-  const requestsByAllocationKey = buildRequestsByAllocationKey(
-    [oldest, newest],
-    { newest: { created_at: 20 }, oldest: { created_at: 10 } },
-    {}
-  );
-  assertDeepEqual(
-    requestsByAllocationKey["slot-1"].map((booking) => booking.id),
-    ["newest", "oldest"],
-    "buildRequestsByAllocationKey should sort bookings by newest timestamp first"
-  );
+describe("bookingSelectors", () => {
+  it("sorts requests by newest timestamp first", () => {
+    const oldest = makeBooking({ id: "oldest" });
+    const newest = makeBooking({ id: "newest" });
 
-  const firstAccepted = makeBooking({
-    id: "accepted-1",
-    studentId: "student-1",
-    status: "accepted"
+    const result = buildRequestsByAllocationKey(
+      [oldest, newest],
+      { newest: { created_at: 20 }, oldest: { created_at: 10 } },
+      {}
+    );
+
+    expect(result["slot-1"].map((booking) => booking.id)).toEqual([
+      "newest",
+      "oldest"
+    ]);
   });
-  const laterAccepted = makeBooking({
-    id: "accepted-2",
-    studentId: "student-2",
-    status: "accepted"
-  });
-  const winnerByAllocationKey = selectWinningOccupancyByAllocationKey(
-    [firstAccepted, laterAccepted],
-    { "accepted-1": { created_at: 10 }, "accepted-2": { created_at: 20 } },
-    {}
-  );
-  assertDeepEqual(
-    winnerByAllocationKey,
-    {
+
+  it("keeps the latest accepted booking as the slot winner", () => {
+    const firstAccepted = makeBooking({
+      id: "accepted-1",
+      studentId: "student-1",
+      status: "accepted"
+    });
+    const laterAccepted = makeBooking({
+      id: "accepted-2",
+      studentId: "student-2",
+      status: "accepted"
+    });
+
+    const result = selectWinningOccupancyByAllocationKey(
+      [firstAccepted, laterAccepted],
+      { "accepted-1": { created_at: 10 }, "accepted-2": { created_at: 20 } },
+      {}
+    );
+
+    expect(result).toEqual({
       "slot-1": {
         studentId: "student-2",
         source: "booking"
       }
-    },
-    "selectWinningOccupancyByAllocationKey should keep the latest accepted booking per slot"
-  );
+    });
+  });
 
-  const firstPending = makeBooking({ id: "pending-1", status: "pending" });
-  const laterActive = makeBooking({ id: "accepted-1", status: "accepted" });
-  const rejected = makeBooking({ id: "rejected-1", status: "rejected" });
-  const activeBidBySlotAndStudent = selectActiveBidBySlotAndStudent(
-    [firstPending, laterActive, rejected],
-    {
-      "pending-1": { created_at: 10 },
-      "accepted-1": { created_at: 20 },
-      "rejected-1": { created_at: 30 }
-    },
-    {}
-  );
-  assertEqual(
-    Object.keys(activeBidBySlotAndStudent).length,
-    1,
-    "selectActiveBidBySlotAndStudent should ignore inactive bookings"
-  );
-  assert(
-    activeBidBySlotAndStudent["tutor-1|2026-05-09T10:00:00.000Z|2026-05-09T11:00:00.000Z|student-1"]?.id ===
-      "accepted-1",
-    "selectActiveBidBySlotAndStudent should keep the latest active booking per slot and student"
-  );
-}
+  it("keeps the latest active booking per slot and student", () => {
+    const firstPending = makeBooking({ id: "pending-1", status: "pending" });
+    const laterActive = makeBooking({ id: "accepted-1", status: "accepted" });
+    const rejected = makeBooking({ id: "rejected-1", status: "rejected" });
 
-runBookingSelectorTests();
-console.log("bookingSelectors tests passed");
+    const result = selectActiveBidBySlotAndStudent(
+      [firstPending, laterActive, rejected],
+      {
+        "pending-1": { created_at: 10 },
+        "accepted-1": { created_at: 20 },
+        "rejected-1": { created_at: 30 }
+      },
+      {}
+    );
+
+    expect(Object.keys(result)).toHaveLength(1);
+    expect(
+      result["tutor-1|2026-05-09T10:00:00.000Z|2026-05-09T11:00:00.000Z|student-1"]?.id
+    ).toBe("accepted-1");
+  });
+});

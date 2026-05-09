@@ -3,7 +3,7 @@ import { Lesson } from "../../domain/lesson";
 import { BookingRepository } from "../../ports/bookingRepository";
 import { LessonRepository } from "../../ports/lessonRepository";
 
-type LessonFactory = (input: {
+export type LessonFactory = (input: {
   bookingId: string;
   tutorId: string;
   studentId: string;

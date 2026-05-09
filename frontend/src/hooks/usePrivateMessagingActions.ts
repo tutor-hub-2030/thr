@@ -1,24 +1,19 @@
 import { useCallback } from "react";
-import { nostrClient } from "../nostr/client";
 import { ProgressEntry } from "../types/nostr";
+import { usePrivateMessagingRepository } from "./usePrivateMessagingRepository";
 
 export function usePrivateMessagingActions() {
+  const messagingRepository = usePrivateMessagingRepository();
+
   const sendMessage = useCallback(async (recipientPubkey: string, text: string) => {
-    if (!text.trim()) {
-      return;
-    }
-    await nostrClient.publishEncryptedEvent(4, recipientPubkey, text);
-  }, []);
+    await messagingRepository.sendMessage(recipientPubkey, text);
+  }, [messagingRepository]);
 
   const sendProgressEntry = useCallback(
     async (recipientPubkey: string, entry: ProgressEntry) => {
-      await nostrClient.publishEncryptedEvent(
-        30004,
-        recipientPubkey,
-        JSON.stringify(entry)
-      );
+      await messagingRepository.sendProgressEntry(recipientPubkey, entry);
     },
-    []
+    [messagingRepository]
   );
 
   return { sendMessage, sendProgressEntry };

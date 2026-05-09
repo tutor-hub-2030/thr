@@ -1,10 +1,10 @@
 import { useEffect, useMemo, useState } from "react";
-import { nostrClient } from "../nostr/client";
 import { EncryptedMessage } from "../types/nostr";
-import { getTagValue } from "../utils/nostrTags";
+import { usePrivateMessagingRepository } from "./usePrivateMessagingRepository";
 
 export function useEncryptedMessages(pubkey: string) {
   const [messages, setMessages] = useState<EncryptedMessage[]>([]);
+  const messagingRepository = usePrivateMessagingRepository();
 
   useEffect(() => {
     const pushMessage = (message: EncryptedMessage) => {
@@ -19,55 +19,8 @@ export function useEncryptedMessages(pubkey: string) {
       });
     };
 
-    const incoming = nostrClient.subscribe(
-      { kinds: [4], "#p": [pubkey], limit: 200 },
-      async (event) => {
-        const plaintext = await nostrClient.decryptContent(
-          event.pubkey,
-          event.content
-        );
-        if (!plaintext) {
-          return;
-        }
-        pushMessage({
-          id: event.id,
-          created_at: event.created_at,
-          pubkey: event.pubkey,
-          counterparty: event.pubkey,
-          content: plaintext
-        });
-      }
-    );
-
-    const outgoing = nostrClient.subscribe(
-      { kinds: [4], authors: [pubkey], limit: 200 },
-      async (event) => {
-        const recipient = getTagValue(event.tags, "p");
-        if (!recipient) {
-          return;
-        }
-        const plaintext = await nostrClient.decryptContent(
-          recipient,
-          event.content
-        );
-        if (!plaintext) {
-          return;
-        }
-        pushMessage({
-          id: event.id,
-          created_at: event.created_at,
-          pubkey: event.pubkey,
-          counterparty: recipient,
-          content: plaintext
-        });
-      }
-    );
-
-    return () => {
-      incoming();
-      outgoing();
-    };
-  }, [pubkey]);
+    return messagingRepository.subscribeMessagesForUser(pubkey, pushMessage);
+  }, [messagingRepository, pubkey]);
 
   const byCounterparty = useMemo(() => {
     return messages.reduce<Record<string, EncryptedMessage[]>>((acc, msg) => {
