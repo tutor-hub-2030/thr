@@ -14,21 +14,7 @@ export class AcceptBooking {
   constructor(
     private bookingRepo: BookingRepository,
     private lessonRepo: LessonRepository,
-    private createLesson: LessonFactory = ({
-      bookingId,
-      tutorId,
-      studentId,
-      scheduledAt
-    }) => ({
-      id: crypto.randomUUID(),
-      bookingId,
-      tutorId,
-      studentId,
-      scheduledAt,
-      durationMin: 60,
-      subject: "",
-      status: "scheduled"
-    })
+    private createLesson: LessonFactory
   ) {}
 
   async execute(bookingId: string) {

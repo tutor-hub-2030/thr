@@ -1,63 +1,30 @@
 import { useEffect, useMemo, useState } from "react";
-import { nostrClient } from "../nostr/client";
-import { BookingStatus, BookingStatusEvent } from "../types/nostr";
-import { getTagValue } from "../utils/nostrTags";
+import { BookingStatusEvent } from "../types/nostr";
+import { useBookingEventsRepository } from "./useBookingEventsRepository";
 
 export function useBookingStatusesForUser(pubkey: string) {
   const [statuses, setStatuses] = useState<
     Record<string, BookingStatusEvent>
   >({});
+  const bookingEventsRepository = useBookingEventsRepository();
 
   useEffect(() => {
-    const pushStatus = (event: {
-      content: string;
-      created_at: number;
-      pubkey: string;
-      tags: string[][];
-      id: string;
-    }) => {
-      try {
-        const parsed = JSON.parse(event.content) as BookingStatus;
-        const bookingId = parsed.bookingId || getTagValue(event.tags, "d") || event.id;
+    return bookingEventsRepository.subscribeStatusesForUser(
+      pubkey,
+      (statusEvent) => {
         setStatuses((prev) => {
-          const existing = prev[bookingId];
-          if (existing && existing.created_at >= event.created_at) {
+          const existing = prev[statusEvent.id];
+          if (existing && existing.created_at >= statusEvent.created_at) {
             return prev;
           }
           return {
             ...prev,
-            [bookingId]: {
-              id: bookingId,
-              created_at: event.created_at,
-              pubkey: event.pubkey,
-              studentPubkey: getTagValue(event.tags, "p") || pubkey,
-              status: {
-                ...parsed,
-                bookingId
-              }
-            }
+            [statusEvent.id]: statusEvent
           };
         });
-      } catch {
-        // ignore malformed content
       }
-    };
-
-    const incoming = nostrClient.subscribe(
-      { kinds: [30003], "#p": [pubkey], limit: 200 },
-      pushStatus
     );
-
-    const authored = nostrClient.subscribe(
-      { kinds: [30003], authors: [pubkey], limit: 200 },
-      pushStatus
-    );
-
-    return () => {
-      incoming();
-      authored();
-    };
-  }, [pubkey]);
+  }, [bookingEventsRepository, pubkey]);
 
   const list = useMemo(
     () => Object.values(statuses),

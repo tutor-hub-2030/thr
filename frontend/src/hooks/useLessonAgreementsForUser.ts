@@ -1,91 +1,27 @@
 import { useEffect, useMemo, useState } from "react";
-import { TutorHubKind } from "../nostr/kinds";
-import { nostrClient } from "../nostr/client";
-import { LessonAgreement, LessonAgreementEvent } from "../types/nostr";
-import { getTagValue, getTagValues } from "../utils/nostrTags";
+import { LessonAgreementEvent } from "../types/nostr";
+import { useLessonAgreementEventsRepository } from "./useLessonAgreementEventsRepository";
 
 export function useLessonAgreementsForUser(pubkey: string) {
   const [agreements, setAgreements] = useState<
     Record<string, LessonAgreementEvent>
   >({});
+  const lessonAgreementEventsRepository = useLessonAgreementEventsRepository();
 
   useEffect(() => {
-    const upsert = (
-      eventPubkey: string,
-      eventId: string,
-      createdAt: number,
-      tags: string[][],
-      content: string
-    ) => {
-      try {
-        const parsed = JSON.parse(content) as LessonAgreement;
-        const lessonId = parsed.lessonId || getTagValue(tags, "d") || eventId;
-        const participants = getTagValues(tags, "p");
-        const tutorPubkey =
-          participants.find((participant) => participant === eventPubkey) ||
-          eventPubkey;
-        const studentPubkey =
-          participants.find((participant) => participant !== tutorPubkey) || "";
-
-        setAgreements((prev) => {
-          const existing = prev[lessonId];
-          if (existing && existing.created_at >= createdAt) {
-            return prev;
-          }
-          return {
-            ...prev,
-            [lessonId]: {
-              id: eventId,
-              created_at: createdAt,
-              pubkey: eventPubkey,
-              lessonId,
-              tutorPubkey,
-              studentPubkey,
-              bookingEventId: getTagValue(tags, "e"),
-              agreement: {
-                ...parsed,
-                lessonId
-              }
-            }
-          };
-        });
-      } catch {
-        // ignore malformed payloads
-      }
-    };
-
-    const incoming = nostrClient.subscribe(
-      { kinds: [TutorHubKind.LessonAgreement], "#p": [pubkey], limit: 200 },
-      (event) =>
-        upsert(event.pubkey, event.id, event.created_at, event.tags, event.content)
-    );
-
-    const own = nostrClient.subscribe(
-      { kinds: [TutorHubKind.LessonAgreement], authors: [pubkey], limit: 200 },
-      (event) =>
-        upsert(event.pubkey, event.id, event.created_at, event.tags, event.content)
-    );
-
-    // Fallback path for relays that do not properly support tag-indexed queries.
-    const broad = nostrClient.subscribe(
-      { kinds: [TutorHubKind.LessonAgreement], limit: 300 },
-      (event) => {
-        const participants = getTagValues(event.tags, "p");
-        const isParticipant = participants.includes(pubkey);
-        const isAuthor = event.pubkey === pubkey;
-        if (!isParticipant && !isAuthor) {
-          return;
+    return lessonAgreementEventsRepository.subscribeForUser(pubkey, (agreement) => {
+      setAgreements((prev) => {
+        const existing = prev[agreement.lessonId];
+        if (existing && existing.created_at >= agreement.created_at) {
+          return prev;
         }
-        upsert(event.pubkey, event.id, event.created_at, event.tags, event.content);
-      }
-    );
-
-    return () => {
-      incoming();
-      own();
-      broad();
-    };
-  }, [pubkey]);
+        return {
+          ...prev,
+          [agreement.lessonId]: agreement
+        };
+      });
+    });
+  }, [lessonAgreementEventsRepository, pubkey]);
 
   const list = useMemo(
     () =>

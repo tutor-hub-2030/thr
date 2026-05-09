@@ -28,6 +28,9 @@ const authDependencies = {
   keyMaterial: nostrKeyMaterial
 };
 
+// HYBRID: This hook is the temporary auth composition root during migration.
+// It wires concrete vault/key/signer adapters and pushes the signer into nostrClient.
+// The target architecture is to replace this with an application-facing auth service.
 function toLocalizedErrorMessage(error: unknown, t: (key: string) => string) {
   if (!(error instanceof Error)) {
     return "";

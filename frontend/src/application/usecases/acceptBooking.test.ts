@@ -158,10 +158,13 @@ describe("AcceptBooking", () => {
       updateStatus: vi.fn()
     };
 
-    await new AcceptBooking(bookingRepo, lessonRepo).execute("missing-booking");
+    const createLesson = vi.fn();
+
+    await new AcceptBooking(bookingRepo, lessonRepo, createLesson).execute("missing-booking");
 
     expect(bookingRepo.getByAllocationKey).not.toHaveBeenCalled();
     expect(bookingRepo.updateStatus).not.toHaveBeenCalled();
     expect(lessonRepo.save).not.toHaveBeenCalled();
+    expect(createLesson).not.toHaveBeenCalled();
   });
 });

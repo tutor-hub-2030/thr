@@ -1,7 +1,7 @@
 import { useMemo } from "react";
 import { createNostrLessonRepository } from "../adapters/nostr/lessonRepository";
 import { LessonRepository } from "../ports/lessonRepository";
-import { useBookingActions } from "./useBookingActions";
+import { useLessonAgreementEventsRepository } from "./useLessonAgreementEventsRepository";
 import { useLessonAgreementsForUser } from "./useLessonAgreementsForUser";
 
 export function useLessonRepository(
@@ -12,7 +12,7 @@ export function useLessonRepository(
   }
 ) {
   const { agreements, list } = useLessonAgreementsForUser(userId);
-  const { publishLessonAgreement, updateLessonAgreementStatus } = useBookingActions();
+  const lessonAgreementEventsRepository = useLessonAgreementEventsRepository();
 
   return useMemo<LessonRepository>(() => {
     return createNostrLessonRepository({
@@ -20,16 +20,25 @@ export function useLessonRepository(
       list,
       agreements,
       defaults,
-      publishLessonAgreement,
-      updateLessonAgreementStatus
+      publishLessonAgreement: (studentPubkey, payload) =>
+        lessonAgreementEventsRepository.publishLessonAgreement(
+          userId,
+          studentPubkey,
+          payload
+        ),
+      updateLessonAgreementStatus: (studentPubkey, payload) =>
+        lessonAgreementEventsRepository.updateLessonAgreementStatus(
+          userId,
+          studentPubkey,
+          payload
+        )
     });
   }, [
     agreements,
     defaults?.currency,
     defaults?.price,
+    lessonAgreementEventsRepository,
     list,
-    publishLessonAgreement,
-    updateLessonAgreementStatus,
     userId
   ]);
 }

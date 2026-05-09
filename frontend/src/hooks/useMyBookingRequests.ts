@@ -1,49 +1,32 @@
 import { useEffect, useMemo, useState } from "react";
-import { nostrClient } from "../nostr/client";
-import { BookingRequest, BookingRequestEvent } from "../types/nostr";
-import { getTagValue } from "../utils/nostrTags";
+import { BookingRequestEvent } from "../types/nostr";
+import { useBookingEventsRepository } from "./useBookingEventsRepository";
 
 export function useMyBookingRequests(pubkey: string) {
   const [requests, setRequests] = useState<Record<string, BookingRequestEvent>>(
     {}
   );
+  const bookingEventsRepository = useBookingEventsRepository();
 
   useEffect(() => {
-    const unsubscribe = nostrClient.subscribe(
-      { kinds: [30002], authors: [pubkey], limit: 200 },
-      (event) => {
-        try {
-          const parsed = JSON.parse(event.content) as BookingRequest;
-          const bookingId =
-            parsed.bookingId || getTagValue(event.tags, "d") || event.id;
-          setRequests((prev) => {
-            const existing = prev[bookingId];
-            if (existing && existing.created_at >= event.created_at) {
-              return prev;
-            }
-            return {
-              ...prev,
-              [bookingId]: {
-                id: bookingId,
-                eventId: event.id,
-                created_at: event.created_at,
-                pubkey: event.pubkey,
-                tutorPubkey: getTagValue(event.tags, "p") || "",
-                request: {
-                  ...parsed,
-                  bookingId
-                }
-              }
-            };
-          });
-        } catch {
-          // ignore malformed content
-        }
+    const unsubscribe = bookingEventsRepository.subscribeRequestsByUser(
+      pubkey,
+      (request) => {
+        setRequests((prev) => {
+          const existing = prev[request.id];
+          if (existing && existing.created_at >= request.created_at) {
+            return prev;
+          }
+          return {
+            ...prev,
+            [request.id]: request
+          };
+        });
       }
     );
 
     return () => unsubscribe();
-  }, [pubkey]);
+  }, [bookingEventsRepository, pubkey]);
 
   const list = useMemo(
     () =>
