@@ -1,9 +1,24 @@
 {
   "name": "tutorstr-relay",
-  "version": "0.0.0",
+  "version": "0.1.0",
   "private": true,
+  "type": "module",
   "scripts": {
-    "build": "node -e \"console.log('relay: no build yet')\"",
-    "start": "node -e \"console.log('relay: no server yet')\""
+    "dev": "tsx watch src/index.ts",
+    "start": "tsx src/index.ts",
+    "build": "tsc"
+  },
+  "dependencies": {
+    "@nostr-dev-kit/ndk": "^2.10.0",
+    "better-sqlite3": "^11.6.0",
+    "nostr-tools": "^2.10.4",
+    "ws": "^8.18.0"
+  },
+  "devDependencies": {
+    "@types/better-sqlite3": "^7.6.11",
+    "@types/node": "^22.9.0",
+    "@types/ws": "^8.5.13",
+    "tsx": "^4.19.2",
+    "typescript": "^5.6.3"
   }
 }
