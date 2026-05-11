@@ -1,14 +1,13 @@
 ```
-# Dependencies
-node_modules/
+# Environment
+.env
+.env.local
+.env.*
 
-# Build artifacts
-dist/
-build/
-*.js
-*.ts
-*.d.ts
+# Logs and temp files
+*.log
+*.tmp
 
-# TypeScript
-*.tsbuildinfo
+# Original rules preserved
+*.log
 ```
