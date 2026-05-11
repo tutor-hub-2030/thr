@@ -1,0 +1,14 @@
+```
+# Dependencies
+node_modules/
+
+# Build artifacts
+dist/
+build/
+*.js
+*.ts
+*.d.ts
+
+# TypeScript
+*.tsbuildinfo
+```
